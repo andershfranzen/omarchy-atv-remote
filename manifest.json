@@ -2,8 +2,8 @@
   "schemaVersion": 1,
   "id": "anders.appletv-remote",
   "name": "Apple TV Remote",
-  "version": "0.1.0",
-  "author": "Anders",
+  "version": "0.2.0",
+  "author": "Anders Haas Franzen",
   "license": "MIT",
   "description": "Control an Apple TV from the Omarchy bar.",
   "kinds": ["bar-widget"],
@@ -18,15 +18,23 @@
     "aliases": ["apple-tv", "remote", "tv"],
     "allowMultiple": false,
     "defaults": {
-      "identifier": ""
+      "identifier": "",
+      "maskTextPreview": false
     },
     "schema": [
       {
         "key": "identifier",
         "type": "string",
-        "label": "Apple TV address",
+        "label": "Apple TV identifier",
         "defaultValue": "",
-        "description": "IPv4 address used for directed discovery. Select a TV in the panel to set it automatically."
+        "description": "Stable device identifier. Select a TV in the panel to set it automatically."
+      },
+      {
+        "key": "maskTextPreview",
+        "type": "boolean",
+        "label": "Mask typed text",
+        "defaultValue": false,
+        "description": "Hide typed characters in the pop-out for privacy."
       }
     ]
   }

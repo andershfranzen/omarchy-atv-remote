@@ -14,11 +14,15 @@ Panel {
   manageIpc: false
 
   readonly property string home: Quickshell.env("HOME") || ""
-  readonly property string pluginDir: home + "/.config/omarchy/plugins/anders.appletv-remote"
+  readonly property string configHome: Quickshell.env("XDG_CONFIG_HOME") || (home + "/.config")
+  readonly property string pluginDir: configHome + "/omarchy/plugins/anders.appletv-remote"
   readonly property string backend: pluginDir + "/bin/apple-tv"
   readonly property string setupScript: pluginDir + "/bin/setup"
   readonly property string identifier: String(setting("identifier", "") || "")
-  readonly property string activeIdentifier: identifier !== "" ? identifier : (devices.length === 1 ? devices[0].identifier : "")
+  readonly property var activeDevice: findActiveDevice()
+  readonly property string activeIdentifier: activeDevice ? String(activeDevice.identifier) : ""
+  readonly property string activeAddress: activeDevice ? String(activeDevice.address) : ""
+  readonly property bool maskTextPreview: Boolean(setting("maskTextPreview", false))
   readonly property color foreground: bar ? bar.foreground : Color.foreground
   readonly property color urgent: bar ? bar.urgent : Color.urgent
   readonly property color dim: Qt.darker(foreground, 1.55)
@@ -32,15 +36,49 @@ Panel {
   property string lastAction: "Waiting for a key"
   property bool textInputActive: false
   property string typedPreview: ""
+  property var commandQueue: []
+  property string runningCommand: ""
+
+  function findActiveDevice() {
+    if (devices.length === 1 && identifier === "") return devices[0]
+    for (var index = 0; index < devices.length; ++index) {
+      var device = devices[index]
+      if (String(device.identifier) === identifier || String(device.address) === identifier) return device
+    }
+    return null
+  }
+
+  function displayedPreview() {
+    return maskTextPreview ? "•".repeat(typedPreview.length) : typedPreview
+  }
+
+  function migrateLegacyIdentifier() {
+    if (!activeDevice || !bar || !bar.shell) return
+    if (identifier === String(activeDevice.address)) {
+      bar.shell.updateEntryInline(moduleName, {
+        id: moduleName,
+        identifier: String(activeDevice.deviceIdentifier),
+        maskTextPreview: maskTextPreview
+      })
+    }
+  }
 
   function command(name) {
-    if (activeIdentifier === "") {
+    if (activeAddress === "") {
       statusText = devices.length > 1 ? "Choose an Apple TV" : "No Apple TV found"
       return
     }
     lastError = ""
-    statusText = "Connected"
-    Quickshell.execDetached([backend, activeIdentifier, name])
+    commandQueue = commandQueue.concat([name])
+    runNextCommand()
+  }
+
+  function runNextCommand() {
+    if (action.running || commandQueue.length === 0 || activeAddress === "") return
+    runningCommand = commandQueue[0]
+    commandQueue = commandQueue.slice(1)
+    action.command = [backend, activeAddress, runningCommand]
+    action.running = true
   }
 
   function sendStroke(stroke, actionName, commandName) {
@@ -66,17 +104,17 @@ Panel {
   }
 
   function pollKeyboardState() {
-    if (!opened || focusState.running || activeIdentifier === "") return
-    focusState.command = [backend, activeIdentifier, "keyboard_state"]
+    if (!opened || focusState.running || activeAddress === "") return
+    focusState.command = [backend, activeAddress, "keyboard_watch"]
     focusState.running = true
   }
 
   function setup() {
-    if (activeIdentifier === "") {
+    if (activeAddress === "") {
       statusText = devices.length > 1 ? "Choose an Apple TV first" : "No Apple TV found"
       return
     }
-    Quickshell.execDetached(["omarchy", "launch", "terminal", setupScript, activeIdentifier])
+    Quickshell.execDetached(["omarchy", "launch", "terminal", setupScript, activeAddress])
     close()
   }
 
@@ -87,14 +125,14 @@ Panel {
   }
 
   function refreshStatus() {
-    if (status.running || activeIdentifier === "") return
-    status.command = [backend, activeIdentifier, "power_state"]
+    if (status.running || activeAddress === "") return
+    status.command = [backend, activeAddress, "power_state"]
     status.running = true
   }
 
   function selectDevice(device) {
     if (!device || !bar || !bar.shell) return
-    var entry = { id: moduleName, identifier: String(device.identifier) }
+    var entry = { id: moduleName, identifier: String(device.deviceIdentifier), maskTextPreview: maskTextPreview }
     bar.shell.updateEntryInline(moduleName, entry)
     statusText = "Selected " + device.name
     Qt.callLater(refreshStatus)
@@ -103,13 +141,28 @@ Panel {
   implicitWidth: button.implicitWidth
   implicitHeight: button.implicitHeight
 
-  onOpenedChanged: if (opened) {
-    lastStroke = "—"
-    lastAction = "Waiting for a key"
-    typedPreview = ""
-    refresh()
-    pollKeyboardState()
-    Qt.callLater(function() { keyCatcher.forceActiveFocus() })
+  Component.onCompleted: refresh()
+
+  onOpenedChanged: {
+    if (opened) {
+      lastStroke = "—"
+      lastAction = "Waiting for a key"
+      typedPreview = ""
+      textInputActive = false
+      refresh()
+      pollKeyboardState()
+      Qt.callLater(function() { keyCatcher.forceActiveFocus() })
+    } else {
+      focusState.running = false
+      textInputActive = false
+      commandQueue = []
+    }
+  }
+
+  onActiveAddressChanged: {
+    focusState.running = false
+    textInputActive = false
+    if (opened && activeAddress !== "") Qt.callLater(pollKeyboardState)
   }
 
   IpcHandler {
@@ -135,16 +188,24 @@ Panel {
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: {
-        try { root.devices = JSON.parse(text.trim() || "[]") }
-        catch (error) { root.devices = []; root.lastError = "Could not read discovery results" }
+        try {
+          var result = JSON.parse(text.trim() || "{}")
+          root.devices = result.devices || []
+          root.lastError = result.error || ""
+          root.migrateLegacyIdentifier()
+          if (root.devices.length === 0) root.statusText = result.error || "No Apple TV found"
+          else if (root.devices.length > 1 && !root.activeDevice) root.statusText = "Choose an Apple TV"
+          else root.refreshStatus()
+        } catch (error) {
+          root.devices = []
+          root.lastError = "Could not read discovery results"
+        }
       }
     }
     onExited: function(exitCode) {
       root.discovering = false
       if (exitCode === 127) root.statusText = "Setup required"
-      else if (root.devices.length === 0) root.statusText = "No Apple TV found"
-      else if (root.devices.length > 1 && root.identifier === "") root.statusText = "Choose an Apple TV"
-      else root.refreshStatus()
+      else if (exitCode !== 0 && root.lastError === "") root.statusText = "Discovery failed"
     }
   }
 
@@ -158,28 +219,35 @@ Panel {
     onExited: function(exitCode) {
       root.statusText = exitCode === 0 ? "Command sent" : "Could not reach Apple TV"
       if (exitCode === 127) root.statusText = "Setup required"
+      root.runningCommand = ""
+      Qt.callLater(root.runNextCommand)
     }
   }
 
   Process {
     id: focusState
-    stdout: StdioCollector {
-      waitForEnd: true
-      onStreamFinished: {
+    stdout: SplitParser {
+      onRead: function(line) {
         try {
-          var result = JSON.parse(text.trim() || "{}")
+          var result = JSON.parse(String(line).trim() || "{}")
           root.textInputActive = result.keyboard === "Focused"
-        } catch (error) {}
+        } catch (error) {
+          root.lastError = "Could not read keyboard state"
+        }
       }
+    }
+    stderr: SplitParser {
+      onRead: function(line) {
+        if (String(line).trim() !== "") root.lastError = String(line).trim()
+      }
+    }
+    onExited: function(exitCode) {
+      root.textInputActive = false
+      if (root.opened && root.activeAddress !== "" && exitCode !== 127) focusRetry.restart()
     }
   }
 
-  Timer {
-    interval: 500
-    running: root.opened
-    repeat: true
-    onTriggered: root.pollKeyboardState()
-  }
+  Timer { id: focusRetry; interval: 1500; repeat: false; onTriggered: root.pollKeyboardState() }
 
   Timer {
     id: previewClear
@@ -316,7 +384,7 @@ Panel {
               required property var modelData
               width: parent.width
               text: String(modelData.name) + "  ·  " + String(modelData.address)
-              iconText: "󰐹"
+              iconText: "󰟴"
               foreground: root.foreground
               fontFamily: root.fontFamily
               bordered: true
@@ -340,7 +408,7 @@ Panel {
             Text {
               anchors.horizontalCenter: parent.horizontalCenter
               width: Math.max(0, keyFeedback.parent.width - Style.space(28))
-              text: root.textInputActive && root.typedPreview !== "" ? root.typedPreview : root.lastStroke
+              text: root.textInputActive && root.typedPreview !== "" ? root.displayedPreview() : root.lastStroke
               color: root.foreground
               font.family: root.fontFamily
               font.pixelSize: Style.font.displayLarge

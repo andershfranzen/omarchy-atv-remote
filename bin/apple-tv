@@ -19,7 +19,7 @@ fi
 
 args=()
 case "$command" in
-  up|down|left|right|select|menu|home|home_hold|play|pause|play_pause|volume_up|volume_down|turn_on|turn_off|keyboard_state|text_backspace|text_append:*)
+  up|down|left|right|select|menu|home|home_hold|play|pause|play_pause|volume_up|volume_down|turn_on|turn_off|power_state|keyboard_state|keyboard_watch|text_backspace|text_append:*)
     if [[ -n "$target" ]]; then
       exec "$data_home/omarchy/apple-tv-remote/venv/bin/python" \
         "$plugin_dir/bin/remote_client.py" "$target" "$command" "$plugin_dir/bin/remote_daemon.py"

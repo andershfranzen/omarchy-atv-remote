@@ -3,44 +3,11 @@ set -euo pipefail
 
 data_home="${XDG_DATA_HOME:-$HOME/.local/share}"
 python="$data_home/omarchy/apple-tv-remote/venv/bin/python"
+plugin_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 
 if [[ ! -x "$python" ]]; then
-  printf '[]\n'
+  printf '{"error":"Setup required","devices":[]}\n'
   exit 127
 fi
 
-exec "$python" - <<'PY'
-import json
-import re
-import subprocess
-
-# Omarchy runs Avahi already. Use its cache instead of opening a second raw
-# mDNS socket, which UFW can filter even though avahi-daemon receives replies.
-scan = subprocess.run(
-    ["avahi-browse", "-rtp", "_airplay._tcp"],
-    capture_output=True,
-    text=True,
-    timeout=8,
-    check=False,
-)
-result = []
-seen = set()
-for line in scan.stdout.splitlines():
-    fields = line.split(";", 9)
-    if len(fields) < 10 or fields[0] != "=" or fields[2] != "IPv4":
-        continue
-    name, address, txt = fields[3], fields[7], fields[9]
-    model = re.search(r'"model=([^" ]+)', txt)
-    if not model or not model.group(1).startswith("AppleTV") or address in seen:
-        continue
-    seen.add(address)
-    device_id = re.search(r'"deviceid=([^" ]+)', txt)
-    result.append({
-        "name": name.replace(r"\032", " "),
-        "identifier": address,
-        "deviceIdentifier": device_id.group(1) if device_id else "",
-        "address": address,
-        "model": model.group(1),
-    })
-print(json.dumps(result))
-PY
+exec "$python" "$plugin_dir/bin/discovery.py"

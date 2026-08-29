@@ -2,7 +2,7 @@
 
 A native Omarchy bar panel backed by [pyatv](https://pyatv.dev/).
 
-Dependencies are Python 3, `python-venv`, Avahi (`avahi-browse`), and the
+Dependencies are Python 3, Avahi (`avahi-browse`), and the
 [`pyatv`](https://pyatv.dev/) package installed by the pairing flow.
 
 ## Install
@@ -17,7 +17,7 @@ The widget is added to the Omarchy bar. Open its remote icon to continue.
 
 1. Open the remote icon and choose **Install and pair Apple TV**. The setup terminal
    installs `pyatv` into a private virtual environment under
-   `~/.local/share/omarchy/apple-tv-remote/` and starts its pairing wizard. The
+   `~/.local/share/omarchy/apple-tv-remote/` and starts its guided pairing flow. The
    computer and Apple TV must be on the same network.
 
 2. All Apple TVs discovered on the local network appear at the top of the
@@ -47,7 +47,12 @@ and switches to text-input mode. Printable keys and Space type directly into
 the Apple TV field; Backspace deletes text. The normal remote mappings return
 as soon as the field loses focus. The pop-out shows the text sent during the
 current typing burst, reflects Backspace edits, and clears the preview shortly
-after typing stops.
+after typing stops. Enable `maskTextPreview` in the widget settings to replace
+the preview with bullets when entering sensitive text.
+
+The selected Apple TV is stored by its stable device identifier, so changing
+DHCP addresses does not require selecting or pairing it again. Backend sessions
+shut down after ten idle minutes and restart automatically after plugin updates.
 
 The panel can also be scripted with Omarchy Shell IPC, for example:
 

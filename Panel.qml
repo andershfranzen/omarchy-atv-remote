@@ -430,7 +430,16 @@ Panel {
   }
 
   component RemoteIcon: Item {
+    id: remoteIcon
     property color color: root.foreground
+
+    Rectangle {
+      id: tintLayer
+      anchors.fill: remoteSvg
+      color: remoteIcon.color
+      visible: false
+      layer.enabled: true
+    }
 
     Image {
       id: remoteSvg
@@ -445,10 +454,11 @@ Panel {
 
     MultiEffect {
       anchors.fill: remoteSvg
-      source: remoteSvg
-      brightness: 1.0
-      colorization: 1.0
-      colorizationColor: root.foreground
+      source: tintLayer
+      maskEnabled: true
+      maskSource: remoteSvg
+      maskThresholdMin: 0.01
+      maskSpreadAtMin: 0.01
     }
   }
 }

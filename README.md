@@ -2,6 +2,9 @@
 
 A native Omarchy bar panel backed by [pyatv](https://pyatv.dev/).
 
+Dependencies are Python 3, `python-venv`, Avahi (`avahi-browse`), and the
+[`pyatv`](https://pyatv.dev/) package installed by the pairing flow.
+
 ## Install
 
 ```bash
@@ -45,3 +48,18 @@ The panel can also be scripted with Omarchy Shell IPC, for example:
 omarchy-shell anders.appletv-remote playPause
 omarchy-shell anders.appletv-remote home
 ```
+
+## Remove
+
+```bash
+omarchy plugin remove anders.appletv-remote
+```
+
+Omarchy removes the plugin itself. Pairing credentials in `~/.pyatv.conf` and
+the isolated backend under `~/.local/share/omarchy/apple-tv-remote/` are left
+in place intentionally so removal never deletes user data without consent.
+
+## License
+
+The plugin is MIT licensed. The bundled Siri Remote SVG is CC0; its source and
+license notice are in `assets/LICENSE.txt`.

@@ -1,0 +1,33 @@
+{
+  "schemaVersion": 1,
+  "id": "anders.appletv-remote",
+  "name": "Apple TV Remote",
+  "version": "0.1.0",
+  "author": "Anders",
+  "license": "MIT",
+  "description": "Control an Apple TV from the Omarchy bar.",
+  "kinds": ["bar-widget"],
+  "activation": "on-demand",
+  "entryPoints": {
+    "barWidget": "Panel.qml"
+  },
+  "barWidget": {
+    "displayName": "Apple TV Remote",
+    "description": "Navigation, playback, volume and power controls for Apple TV.",
+    "category": "Media",
+    "aliases": ["apple-tv", "remote", "tv"],
+    "allowMultiple": false,
+    "defaults": {
+      "identifier": ""
+    },
+    "schema": [
+      {
+        "key": "identifier",
+        "type": "string",
+        "label": "Apple TV address",
+        "defaultValue": "",
+        "description": "IPv4 address used for directed discovery. Select a TV in the panel to set it automatically."
+      }
+    ]
+  }
+}

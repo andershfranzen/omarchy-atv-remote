@@ -1,0 +1,5 @@
+Siri Remote icon from SVG Repo:
+https://www.svgrepo.com/svg/150566/siri-remote
+
+License: CC0 1.0 Universal (public domain dedication)
+https://creativecommons.org/publicdomain/zero/1.0/

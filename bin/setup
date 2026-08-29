@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+plugin_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+data_home="${XDG_DATA_HOME:-$HOME/.local/share}"
+venv="$data_home/omarchy/apple-tv-remote/venv"
+target="${1:-}"
+
+printf 'Installing the Apple TV control backend...\n'
+mkdir -p "$(dirname -- "$venv")"
+python -m venv "$venv"
+"$venv/bin/python" -m pip install --upgrade pip
+"$venv/bin/python" -m pip install 'pyatv>=0.16,<1'
+
+printf '\nStarting Apple TV discovery and pairing.\n'
+printf 'Keep this computer and the Apple TV on the same network.\n\n'
+if [[ -n "$target" ]]; then
+  paired=0
+  for protocol in companion airplay raop; do
+    printf '\nPairing %s protocol with %s...\n' "$protocol" "$target"
+    if "$plugin_dir/bin/atvremote-compat" --scan-hosts "$target" --protocol "$protocol" pair; then
+      paired=1
+    else
+      printf 'Could not pair %s; continuing with the remaining protocols.\n' "$protocol" >&2
+    fi
+  done
+  printf '\n'
+  if (( paired )); then
+    printf 'Pairing finished. You can close this terminal and reopen the remote.\n'
+    read -r -p 'Press Enter to close...'
+    exit 0
+  fi
+  printf 'No Apple TV protocols were paired.\n' >&2
+  read -r -p 'Press Enter to close...'
+  exit 1
+fi
+exec "$plugin_dir/bin/atvremote-compat" wizard

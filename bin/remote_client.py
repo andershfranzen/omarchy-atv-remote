@@ -24,6 +24,7 @@ def send():
         response = json.loads(client.makefile().readline())
         if not response.get("ok"):
             raise RuntimeError(response.get("error", "Apple TV command failed"))
+        print(json.dumps(response))
 
 
 try:

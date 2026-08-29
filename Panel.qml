@@ -30,6 +30,7 @@ Panel {
   property bool discovering: false
   property string lastStroke: "—"
   property string lastAction: "Waiting for a key"
+  property bool textInputActive: false
 
   function command(name) {
     if (activeIdentifier === "") {
@@ -45,6 +46,18 @@ Panel {
     lastStroke = stroke
     lastAction = actionName
     command(commandName)
+  }
+
+  function sendText(text) {
+    lastStroke = text === " " ? "SPACE" : text
+    lastAction = "Type text"
+    command("text_append:" + text)
+  }
+
+  function pollKeyboardState() {
+    if (!opened || focusState.running || activeIdentifier === "") return
+    focusState.command = [backend, activeIdentifier, "keyboard_state"]
+    focusState.running = true
   }
 
   function setup() {
@@ -83,6 +96,7 @@ Panel {
     lastStroke = "—"
     lastAction = "Waiting for a key"
     refresh()
+    pollKeyboardState()
     Qt.callLater(function() { keyCatcher.forceActiveFocus() })
   }
 
@@ -133,6 +147,26 @@ Panel {
       root.statusText = exitCode === 0 ? "Command sent" : "Could not reach Apple TV"
       if (exitCode === 127) root.statusText = "Setup required"
     }
+  }
+
+  Process {
+    id: focusState
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: {
+        try {
+          var result = JSON.parse(text.trim() || "{}")
+          root.textInputActive = result.keyboard === "Focused"
+        } catch (error) {}
+      }
+    }
+  }
+
+  Timer {
+    interval: 500
+    running: root.opened
+    repeat: true
+    onTriggered: root.pollKeyboardState()
   }
 
   Process {
@@ -199,8 +233,12 @@ Panel {
         else if (event.key === Qt.Key_Up) root.sendStroke("↑", "Up", "up")
         else if (event.key === Qt.Key_Down) root.sendStroke("↓", "Down", "down")
         else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) root.sendStroke("ENTER", "Select", "select")
+        else if (event.key === Qt.Key_Backspace && root.textInputActive) root.sendStroke("BACKSPACE", "Delete text", "text_backspace")
         else if (event.key === Qt.Key_Backspace) root.sendStroke("BACKSPACE", "Back / Menu", "menu")
+        else if (event.key === Qt.Key_Space && root.textInputActive) root.sendText(" ")
         else if (event.key === Qt.Key_Space) root.sendStroke("SPACE", "Play / Pause", "play_pause")
+        else if (root.textInputActive && event.text && event.text.length > 0
+                 && !(event.modifiers & (Qt.ControlModifier | Qt.AltModifier | Qt.MetaModifier))) root.sendText(event.text)
         else if (event.key === Qt.Key_H) root.sendStroke("H", "Home", "home")
         else if (event.text === "+" || event.key === Qt.Key_Plus) root.sendStroke("+", "Volume up", "volume_up")
         else if (event.text === "-" || event.key === Qt.Key_Minus) root.sendStroke("−", "Volume down", "volume_down")
@@ -216,7 +254,7 @@ Panel {
         PanelHero {
           width: parent.width
           title: "Apple TV"
-          meta: root.statusText.toUpperCase()
+          meta: root.textInputActive ? "TYPE ON YOUR KEYBOARD" : root.statusText.toUpperCase()
           foreground: root.foreground
           fontFamily: root.fontFamily
           iconComponent: Component {
@@ -314,6 +352,17 @@ Panel {
           ShortcutRow { keys: "H"; action: "Home" }
           ShortcutRow { keys: "+  /  −"; action: "Volume" }
           ShortcutRow { keys: "ESC"; action: "Close remote" }
+
+          Text {
+            visible: root.textInputActive
+            width: parent.width
+            text: "Text field detected · printable keys and Backspace are sent directly"
+            color: root.foreground
+            font.family: root.fontFamily
+            font.pixelSize: Style.font.bodySmall
+            font.bold: true
+            wrapMode: Text.WordWrap
+          }
         }
 
         Button {

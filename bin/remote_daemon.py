@@ -31,6 +31,23 @@ async def connect():
 
 async def invoke(command):
     global atv
+    if command == "keyboard_state":
+        state = atv.keyboard.text_focus_state.name
+        if state == "Unknown":
+            try:
+                await atv.keyboard.text_get()
+                state = atv.keyboard.text_focus_state.name
+            except Exception:
+                pass
+        return {"keyboard": state}
+    if command.startswith("text_append:"):
+        await atv.keyboard.text_append(command[len("text_append:"):])
+        return {}
+    if command == "text_backspace":
+        current = await atv.keyboard.text_get()
+        if current:
+            await atv.keyboard.text_set(current[:-1])
+        return {}
     targets = {
         "turn_on": "power",
         "turn_off": "power",
@@ -40,6 +57,7 @@ async def invoke(command):
     owner = getattr(atv, targets.get(command, "remote_control"))
     method = getattr(owner, command)
     await method()
+    return {}
 
 
 async def handle(reader, writer):
@@ -47,14 +65,14 @@ async def handle(reader, writer):
         request = json.loads((await reader.readline()).decode())
         command = str(request["command"])
         try:
-            await invoke(command)
+            result = await invoke(command)
         except Exception:
             # The Apple TV can sever an idle Companion session. Reconnect once
             # and replay the key instead of making the first press feel lost.
             await close_connection()
             await connect()
-            await invoke(command)
-        writer.write(b'{"ok":true}\n')
+            result = await invoke(command)
+        writer.write((json.dumps({"ok": True, **result}) + "\n").encode())
     except Exception as error:
         writer.write((json.dumps({"ok": False, "error": str(error)}) + "\n").encode())
     finally:

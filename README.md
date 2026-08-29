@@ -42,6 +42,11 @@ The panel displays each keystroke and the action sent to Apple TV. It maintains
 a persistent Companion connection, so repeated navigation commands do not
 reconnect for every keypress.
 
+When tvOS focuses a search or login field, the panel detects it automatically
+and switches to text-input mode. Printable keys and Space type directly into
+the Apple TV field; Backspace deletes text. The normal remote mappings return
+as soon as the field loses focus.
+
 The panel can also be scripted with Omarchy Shell IPC, for example:
 
 ```bash

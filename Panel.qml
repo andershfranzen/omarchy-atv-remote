@@ -31,6 +31,7 @@ Panel {
   property string lastStroke: "—"
   property string lastAction: "Waiting for a key"
   property bool textInputActive: false
+  property string typedPreview: ""
 
   function command(name) {
     if (activeIdentifier === "") {
@@ -50,8 +51,18 @@ Panel {
 
   function sendText(text) {
     lastStroke = text === " " ? "SPACE" : text
-    lastAction = "Type text"
+    lastAction = "Text sent to Apple TV"
+    typedPreview += text
+    previewClear.restart()
     command("text_append:" + text)
+  }
+
+  function sendTextBackspace() {
+    lastStroke = "BACKSPACE"
+    lastAction = "Text updated on Apple TV"
+    if (typedPreview.length > 0) typedPreview = typedPreview.slice(0, -1)
+    previewClear.restart()
+    command("text_backspace")
   }
 
   function pollKeyboardState() {
@@ -95,6 +106,7 @@ Panel {
   onOpenedChanged: if (opened) {
     lastStroke = "—"
     lastAction = "Waiting for a key"
+    typedPreview = ""
     refresh()
     pollKeyboardState()
     Qt.callLater(function() { keyCatcher.forceActiveFocus() })
@@ -169,6 +181,17 @@ Panel {
     onTriggered: root.pollKeyboardState()
   }
 
+  Timer {
+    id: previewClear
+    interval: 1800
+    repeat: false
+    onTriggered: {
+      root.typedPreview = ""
+      root.lastStroke = "—"
+      root.lastAction = root.textInputActive ? "Waiting for text" : "Waiting for a key"
+    }
+  }
+
   Process {
     id: status
     stdout: StdioCollector {
@@ -233,7 +256,7 @@ Panel {
         else if (event.key === Qt.Key_Up) root.sendStroke("↑", "Up", "up")
         else if (event.key === Qt.Key_Down) root.sendStroke("↓", "Down", "down")
         else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) root.sendStroke("ENTER", "Select", "select")
-        else if (event.key === Qt.Key_Backspace && root.textInputActive) root.sendStroke("BACKSPACE", "Delete text", "text_backspace")
+        else if (event.key === Qt.Key_Backspace && root.textInputActive) root.sendTextBackspace()
         else if (event.key === Qt.Key_Backspace) root.sendStroke("BACKSPACE", "Back / Menu", "menu")
         else if (event.key === Qt.Key_Space && root.textInputActive) root.sendText(" ")
         else if (event.key === Qt.Key_Space) root.sendStroke("SPACE", "Play / Pause", "play_pause")
@@ -316,11 +339,14 @@ Panel {
 
             Text {
               anchors.horizontalCenter: parent.horizontalCenter
-              text: root.lastStroke
+              width: Math.max(0, keyFeedback.parent.width - Style.space(28))
+              text: root.textInputActive && root.typedPreview !== "" ? root.typedPreview : root.lastStroke
               color: root.foreground
               font.family: root.fontFamily
               font.pixelSize: Style.font.displayLarge
               font.bold: true
+              horizontalAlignment: Text.AlignHCenter
+              elide: Text.ElideLeft
             }
             Text {
               anchors.horizontalCenter: parent.horizontalCenter

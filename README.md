@@ -45,7 +45,9 @@ reconnect for every keypress.
 When tvOS focuses a search or login field, the panel detects it automatically
 and switches to text-input mode. Printable keys and Space type directly into
 the Apple TV field; Backspace deletes text. The normal remote mappings return
-as soon as the field loses focus.
+as soon as the field loses focus. The pop-out shows the text sent during the
+current typing burst, reflects Backspace edits, and clears the preview shortly
+after typing stops.
 
 The panel can also be scripted with Omarchy Shell IPC, for example:
 

@@ -2,11 +2,13 @@
   "schemaVersion": 1,
   "id": "anders.appletv-remote",
   "name": "Apple TV Remote",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "author": "Anders Haas Franzen",
   "license": "MIT",
-  "description": "Control an Apple TV from the Omarchy bar.",
-  "kinds": ["bar-widget"],
+  "description": "Keyboard remote for Apple TV with in-panel pairing, automatic discovery, and Now Playing.",
+  "kinds": [
+    "bar-widget"
+  ],
   "activation": "on-demand",
   "entryPoints": {
     "barWidget": "Panel.qml"
@@ -15,11 +17,16 @@
     "displayName": "Apple TV Remote",
     "description": "Navigation, playback, volume and power controls for Apple TV.",
     "category": "Media",
-    "aliases": ["apple-tv", "remote", "tv"],
+    "aliases": [
+      "apple-tv",
+      "remote",
+      "tv"
+    ],
     "allowMultiple": false,
     "defaults": {
       "identifier": "",
-      "maskTextPreview": false
+      "maskTextPreview": false,
+      "shortcuts": "{}"
     },
     "schema": [
       {

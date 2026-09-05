@@ -1,0 +1,5 @@
+#!/bin/bash
+set -euo pipefail
+export PATH=/usr/bin:/bin
+plugin_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+exec /usr/bin/python -E -s -B "$plugin_dir/bin/runner.py" 600 /usr/bin/python -E -s -B "$plugin_dir/bin/runtime.py" pair "$@"

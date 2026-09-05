@@ -1,40 +1,8 @@
-#!/usr/bin/env bash
+#!/bin/bash
 set -euo pipefail
-
+export PATH=/usr/bin:/bin
 plugin_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
-data_home="${XDG_DATA_HOME:-$HOME/.local/share}"
-atvremote="$plugin_dir/bin/atvremote-compat"
-
-if [[ ! -x "$data_home/omarchy/apple-tv-remote/venv/bin/python" ]]; then
-  printf 'Apple TV Remote is not installed. Run: %s/bin/setup\n' "$plugin_dir" >&2
-  exit 127
-fi
-
-target="${1:-}"
-command="${2:-}"
-if [[ -z "$command" ]]; then
-  printf 'Usage: apple-tv [identifier] <command>\n' >&2
-  exit 2
-fi
-
-args=()
-case "$command" in
-  up|down|left|right|select|menu|home|home_hold|play|pause|play_pause|volume_up|volume_down|turn_on|turn_off|power_state|keyboard_state|keyboard_watch|text_backspace|text_append:*)
-    if [[ -n "$target" ]]; then
-      exec "$data_home/omarchy/apple-tv-remote/venv/bin/python" \
-        "$plugin_dir/bin/remote_client.py" "$target" "$command" "$plugin_dir/bin/remote_daemon.py"
-    fi
-    ;;
-esac
-
-if [[ -n "$target" ]]; then
-  if [[ "$target" == *.* ]]; then
-    # Directed discovery works through UFW, whereas pyatv's raw multicast
-    # socket can be filtered even while the system Avahi daemon sees the TV.
-    args+=(--scan-hosts "$target")
-  else
-    args+=(--id "$target")
-  fi
-fi
-
-exec "$atvremote" "${args[@]}" "$command"
+[[ $# == 2 ]] || { printf 'Usage: apple-tv <IPv4 address> <command>\n' >&2; exit 2; }
+limit=25
+[[ "$2" == keyboard_watch ]] && limit=3600
+exec /usr/bin/python -E -s -B "$plugin_dir/bin/runner.py" "$limit" /usr/bin/python -E -s -B "$plugin_dir/bin/runtime.py" remote "$1" "$2" "$plugin_dir/bin/remote_daemon.py"

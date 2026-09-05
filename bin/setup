@@ -1,43 +1,7 @@
-#!/usr/bin/env bash
+#!/bin/bash
 set -euo pipefail
-
+export PATH=/usr/bin:/bin
 plugin_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
-data_home="${XDG_DATA_HOME:-$HOME/.local/share}"
-venv="$data_home/omarchy/apple-tv-remote/venv"
-target="${1:-}"
-
-printf 'Installing the Apple TV control backend...\n'
-for dependency in python avahi-browse; do
-  if ! command -v "$dependency" >/dev/null 2>&1; then
-    printf 'Required command is missing: %s\n' "$dependency" >&2
-    exit 127
-  fi
-done
-mkdir -p "$(dirname -- "$venv")"
-python -m venv "$venv"
-"$venv/bin/python" -m pip install --upgrade pip
-"$venv/bin/python" -m pip install 'pyatv==0.18.0'
-
-printf '\nStarting Apple TV discovery and pairing.\n'
-printf 'Keep this computer and the Apple TV on the same network.\n\n'
-if [[ -n "$target" ]]; then
-  companion_paired=0
-  for protocol in companion airplay raop; do
-    printf '\nPairing %s protocol with %s...\n' "$protocol" "$target"
-    if "$plugin_dir/bin/atvremote-compat" --scan-hosts "$target" --protocol "$protocol" pair; then
-      [[ "$protocol" == companion ]] && companion_paired=1
-    else
-      printf 'Could not pair %s; continuing with the remaining protocols.\n' "$protocol" >&2
-    fi
-  done
-  printf '\n'
-  if (( companion_paired )); then
-    printf 'Pairing finished. You can close this terminal and reopen the remote.\n'
-    read -r -p 'Press Enter to close...'
-    exit 0
-  fi
-  printf 'Companion pairing failed; navigation and typing will not work.\n' >&2
-  read -r -p 'Press Enter to close...'
-  exit 1
-fi
-exec "$plugin_dir/bin/atvremote-compat" wizard
+# Installation is shared with in-panel pairing and verifies the complete lock.
+/usr/bin/python -E -s -B "$plugin_dir/bin/runner.py" 330 /usr/bin/python -E -s -B "$plugin_dir/bin/runtime.py" install
+printf 'Installation complete. Open Apple TV Remote and choose Manage Apple TV to pair.\n'

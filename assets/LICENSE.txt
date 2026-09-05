@@ -3,3 +3,9 @@ https://www.svgrepo.com/svg/150566/siri-remote
 
 License: CC0 1.0 Universal (public domain dedication)
 https://creativecommons.org/publicdomain/zero/1.0/
+
+Apple TV logo from Simple Icons v5.0.0:
+https://github.com/simple-icons/simple-icons/blob/5.0.0/icons/appletv.svg
+License: CC0 1.0 Universal
+https://github.com/simple-icons/simple-icons/blob/5.0.0/LICENSE.md
+Artwork unchanged.

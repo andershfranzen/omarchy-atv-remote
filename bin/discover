@@ -1,13 +1,5 @@
-#!/usr/bin/env bash
+#!/bin/bash
 set -euo pipefail
-
-data_home="${XDG_DATA_HOME:-$HOME/.local/share}"
-python="$data_home/omarchy/apple-tv-remote/venv/bin/python"
+export PATH=/usr/bin:/bin
 plugin_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
-
-if [[ ! -x "$python" ]]; then
-  printf '{"error":"Setup required","devices":[]}\n'
-  exit 127
-fi
-
-exec "$python" "$plugin_dir/bin/discovery.py"
+exec /usr/bin/python -E -s -B "$plugin_dir/bin/runner.py" 35 /usr/bin/python -E -s -B "$plugin_dir/bin/runtime.py" discover "$@"

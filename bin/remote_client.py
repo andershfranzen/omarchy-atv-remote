@@ -4,80 +4,108 @@
 import fcntl
 import hashlib
 import json
+import ipaddress
+import stat
 import os
 import socket
 import subprocess
 import sys
 import time
 from pathlib import Path
+from safe_io import runtime_directory, open_file
 
 address, command, daemon = sys.argv[1:4]
-runtime = Path(os.environ.get("XDG_RUNTIME_DIR", f"/tmp/user-{os.getuid()}"))
-daemon_hash = hashlib.sha256(Path(daemon).read_bytes()).hexdigest()[:10]
+address = str(ipaddress.IPv4Address(address))
+runtime = runtime_directory()
+daemon_hash = hashlib.sha256(b"".join(Path(daemon).with_name(name).read_bytes() for name in ("remote_daemon.py", "backend_errors.py", "safe_io.py", "secure_storage.py", "runner.py"))).hexdigest()[:10]
 address_hash = hashlib.sha256(address.encode()).hexdigest()[:12]
 socket_path = runtime / f"omarchy-appletv-{address_hash}-{daemon_hash}.sock"
 lock_path = runtime / f"omarchy-appletv-{address_hash}.lock"
 RETRYABLE = (FileNotFoundError, ConnectionRefusedError, ConnectionResetError, BrokenPipeError, socket.timeout)
 
 
-def send(request_command, watch=False, emit=True):
+def send(request_command, watch=False, emit=True, timeout=15):
     with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
-        client.settimeout(None if watch else 5)
+        info = socket_path.lstat()
+        if not stat.S_ISSOCK(info.st_mode) or info.st_uid != os.getuid():
+            raise PermissionError("Unsafe socket path")
+        client.settimeout(40 if watch else timeout)
         client.connect(str(socket_path))
         client.sendall((json.dumps({"command": request_command}) + "\n").encode())
         stream = client.makefile()
         if watch:
-            for line in stream:
+            while True:
+                line = stream.readline(16385)
+                if not line:
+                    return
+                if len(line) > 16384 or not line.endswith("\n"):
+                    raise ValueError("Oversized backend response")
                 print(line, end="", flush=True)
             return
-        line = stream.readline()
+        line = stream.readline(16385)
+        if len(line) > 16384 or (line and not line.endswith("\n")):
+            raise ValueError("Oversized backend response")
         if not line:
             raise ConnectionResetError("Apple TV backend closed without a response")
         response = json.loads(line)
-        if not response.get("ok"):
-            raise RuntimeError(response.get("error", "Apple TV command failed"))
         if emit:
             print(json.dumps(response), flush=True)
-
-
-def rotate_log(path):
-    if path.exists() and path.stat().st_size > 1_000_000:
-        previous = path.with_suffix(".log.1")
-        previous.unlink(missing_ok=True)
-        path.replace(previous)
+        if not response.get("ok"):
+            raise SystemExit(1)
 
 
 def ensure_backend():
-    runtime.mkdir(parents=True, exist_ok=True)
-    with lock_path.open("a+") as lock:
-        fcntl.flock(lock, fcntl.LOCK_EX)
+    deadline = time.monotonic() + 7
+    with os.fdopen(open_file(lock_path, os.O_CREAT | os.O_RDWR), "a+") as lock:
+        while True:
+            try:
+                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except BlockingIOError:
+                if time.monotonic() >= deadline:
+                    raise TimeoutError("Backend startup lock timed out")
+                time.sleep(.05)
         try:
-            send("keyboard_state", emit=False)
+            send("ping", emit=False, timeout=.5)
             return
         except RETRYABLE:
-            socket_path.unlink(missing_ok=True)
-        log_dir = Path(os.environ.get("XDG_STATE_HOME", Path.home() / ".local/state")) / "omarchy/apple-tv-remote"
-        log_dir.mkdir(parents=True, exist_ok=True)
-        log_path = log_dir / "backend.log"
-        rotate_log(log_path)
-        with log_path.open("ab", buffering=0) as log:
-            subprocess.Popen(
-                [sys.executable, daemon, address, str(socket_path)],
-                stdin=subprocess.DEVNULL, stdout=log, stderr=log,
-                start_new_session=True,
-            )
-        deadline = time.monotonic() + 7
-        while time.monotonic() < deadline:
+            if socket_path.exists():
+                info = socket_path.lstat()
+                if not stat.S_ISSOCK(info.st_mode) or info.st_uid != os.getuid():
+                    raise PermissionError("Unsafe socket path")
+                socket_path.unlink()
+        # The daemon monitors the launching shell's PID/start time and has a
+        # hard one-hour lifetime. No filesystem log or shared-temp fallback.
+        child = subprocess.Popen(
+            [sys.executable, "-E", "-s", "-B", str(Path(daemon).with_name("runner.py")), "daemon", sys.executable, "-E", "-s", "-B", daemon, address, str(socket_path)],
+            stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+        try:
+            while time.monotonic() < deadline:
+                try:
+                    send("ping", emit=False, timeout=.5)
+                    return
+                except RETRYABLE:
+                    if child.poll() is not None:
+                        raise RuntimeError("Backend exited during startup")
+                    time.sleep(.05)
+            raise TimeoutError("Backend startup timed out")
+        except BaseException:
+            child.terminate()
             try:
-                send("keyboard_state", emit=False)
-                return
-            except RETRYABLE:
-                time.sleep(0.05)
-        raise RuntimeError("Apple TV backend did not start; check backend.log")
+                child.wait(timeout=1)
+            except subprocess.TimeoutExpired:
+                child.kill()
+                child.wait()
+            raise
 
 
 try:
-    send(command, watch=command == "keyboard_watch")
-except RETRYABLE:
     ensure_backend()
     send(command, watch=command == "keyboard_watch")
+except Exception as error:
+    offline = isinstance(error, (OSError, TimeoutError))
+    print(json.dumps({"ok": False, "state": "offline" if offline else "error",
+                      "error": "Apple TV is offline or unreachable" if offline else "Could not start the Apple TV backend"}), flush=True)
+    sys.exit(1)
